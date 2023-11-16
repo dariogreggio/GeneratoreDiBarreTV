@@ -84,7 +84,7 @@ void __attribute__ (( interrupt, no_auto_psv )) _T2Interrupt(void) {
 		}
 
 	IFS0bits.T2IF = 0; 			//Clear the Timer2 interrupt status flag
-	// non lo trova @#£$% T2_Clear_Intr_Status_Bit; 	
+	// non lo trova @#Â£$% T2_Clear_Intr_Status_Bit; 	
 	}
 
 
@@ -108,7 +108,7 @@ void __attribute__ (( interrupt, shadow,  no_auto_psv )) _T3Interrupt(void) {
       if(!rowCnt) {
         rowTgl ^= 1;
         rowCnt2++;
-        rowCnt2 %= 18;     // con 20 escono 18 righe/punti; così è ok; v. configParms.Frequenza...
+        rowCnt2 %= 18;     // con 20 escono 18 righe/punti; cosÃ¬ Ã¨ ok; v. configParms.Frequenza...
         if(!rowCnt2) {		// inizio frame
           colTgl = rowTgl = 0;
 
@@ -208,7 +208,7 @@ __asm__ ("label_RUMORE:");
 		}
 
 	IFS0bits.T3IF = 0; 			//Clear the Timer3 interrupt status flag
-	// non lo trova @#£$% T3_Clear_Intr_Status_Bit; 	
+	// non lo trova @#Â£$% T3_Clear_Intr_Status_Bit; 	
 	}
 
 void __attribute__ (( interrupt, no_auto_psv )) _T4Interrupt(void) {
@@ -216,6 +216,6 @@ void __attribute__ (( interrupt, no_auto_psv )) _T4Interrupt(void) {
   m_VideoPin = 0;
   IEC1bits.T4IE=0;
 	IFS1bits.T4IF = 0; 			//Clear the Timer3 interrupt status flag
-	// non lo trova @#£$% T3_Clear_Intr_Status_Bit; 	
+	// non lo trova @#Â£$% T3_Clear_Intr_Status_Bit; 	
 	}
 
