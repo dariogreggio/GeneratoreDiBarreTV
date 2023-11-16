@@ -12,7 +12,7 @@
  Software License Agreement:
 
  The software supplied herewith by Microchip Technology Incorporated
- (the ?Company?) for its PIC® Microcontroller is intended and
+ (the ?Company?) for its PICÂ® Microcontroller is intended and
  supplied to you, the Company?s customer, for use solely and
  exclusively on Microchip PIC Microcontroller products. The
  software is owned by the Company and/or its supplier, and is
@@ -311,7 +311,7 @@ static void InitializeSystem(void) {
 #if defined (__dsPIC33EP256MU806__) 
 //  OSCTUNbits.TUN=21;			//(per andare a 8Mhz per USB!) (non quadrava secondo i calcoli, doveva essere 28 per avere circa il 10% in +...)
   OSCTUNbits.TUN=23;			//(per andare a 8Mhz per USB!) (7.37+(23*.375)%)
-//#warning OCCHIO qua è 7.37 non 8!
+//#warning OCCHIO qua Ã¨ 7.37 non 8!
 
 	PLLFBD = 68; // M = PLLFBD + 2 = 70
   CLKDIVbits.PLLPOST = 0; // N2 = 2
@@ -336,7 +336,7 @@ static void InitializeSystem(void) {
 //	_PLLPRE=6;						// N1 = _PLLPRE+2, 2..33
 //	_PLLPOST=0;						// N2 = _PLLPOST, 2 (0), 4 (1), 8 (3)
 	OSCTUN=0;			//(da USB)
-  CLKDIVbits.PLLPRE = 0; // N1 = 2		// in quest'ordine, dice http://www.microchip.com/forums/FindPost/1011737 (ma non è vero...))
+  CLKDIVbits.PLLPRE = 0; // N1 = 2		// in quest'ordine, dice http://www.microchip.com/forums/FindPost/1011737 (ma non Ã¨ vero...))
   CLKDIVbits.PLLPOST = 0; // N2 = 2  
   PLLFBD = 74; // M = PLLFBD + 2 = 76
   
@@ -381,7 +381,7 @@ static void InitializeSystem(void) {
 //	PPSOut(_U1TX, _RP65);      // TXD IO1
 //	PPSIn(_U1RX, _RP64);      // RXD IO0
 #else
-	PPSOut(_OC2, _RP127);      // buzzer 4KHz , qua è rimappabile
+	PPSOut(_OC2, _RP127);      // buzzer 4KHz , qua Ã¨ rimappabile
 
 	PPSOut(_OC1, _RP80);      // output (pwm cmq)
 //	PPSOut(_U1TX, _RP126);      // TXD 
@@ -407,7 +407,7 @@ skippa:
 
 
 
-// non c'è...	EnablePullUpCN20;			//pulsanti
+// non c'Ã¨...	EnablePullUpCN20;			//pulsanti
 #if defined(__dsPIC33EP256MU806__) 	
 	CNPUBbits.CNPUB15=1;
 	CNPUDbits.CNPUD0=1;		// bah v. switches
@@ -705,7 +705,7 @@ BYTE setFigura(void) {
       IPC6bits.T4IP=4;
 #else
 			OpenTimer3(T3_ON & T3_IDLE_CON & T3_GATE_OFF & T3_PS_1_1 & T3_SOURCE_INT,
-				TMR3BASE);			// così a caso
+				TMR3BASE);			// cosÃ¬ a caso
 			EnableIntT3;
 #endif
 		  n = FCY/1000000L;			// 1MHz a caso
