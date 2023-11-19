@@ -289,30 +289,34 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
 //http://www.doom9.org/index.html?/capture/analogue_video.html
   
   if(DMA0CNT==HORIZ_SYNC_COMP /* 8% circa */) {
-    curLine++;
+
 //    DMA0CONbits.CHEN = 0; //non serve
     switch(VSyncState) {
       case FRONT_PORCH:   // diminuendo qua, scende; aumentando sale
         if(curLine>=(VERT_PORCH_COMP/2)) {   // front porch % circa
-          curLine=0;
     			m_SyncPin=0;
+          curLine=0;
         	__builtin_btg(&LATB,12);    // frame counter :) v. PC_PIC
           VSyncState++;
           }
-        else
+        else {
           m_SyncPin=1;
+          curLine++;
+          }
         DMA0STAL = __builtin_dmaoffset(&blackline);
 //        DMA0STAH = 0;
         break;
       case VSYNC:
         if(curLine>=VERT_SYNC_COMP) {   // 15 linee circa
-          curLine=0;
     			m_SyncPin=1;
           // ovvero (dice) potrebbero essere tanti impulsi da 1/2 riga (32uS)..
+          curLine=0;
           VSyncState++;
           }
-        else
+        else {
           m_SyncPin=0;    //opzionale
+          curLine++;
+          }
         DMA0STAL = __builtin_dmaoffset(&blackline);
 //        DMA0STAH = 0;
         break;
@@ -323,41 +327,47 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
           curLine=0;
           VSyncState++;
           }
+        else
+          curLine++;
         DMA0STAL = __builtin_dmaoffset(&blackline);
 //        DMA0STAH = 0;
         break;
       case TOP_BORDER:
   			m_SyncPin=1;
-        DMA0STAL = __builtin_dmaoffset(&blackline);
-//        DMA0STAH = 0;
         if(curLine>=24) {
           curLine=0;
           VSyncState++;
           }
+        else
+          curLine++;
+        DMA0STAL = __builtin_dmaoffset(&blackline);
+//        DMA0STAH = 0;
         break;
       case VFRAME:
   			m_SyncPin=1;
         DMA0STAL = /*__builtin_dmaoffset*/ ((WORD*)&videoRAM)+curLine*widthDMA;  // transfer source physical address
-
-        
 //        DMA0STAL = __builtin_dmaoffset(&chekeredline);
-        
-        //        DMA0STAH = 0;
+//        DMA0STAH = 0;
         if(curLine>=SCREENSIZE_Y) {   // BISOGNa CENTRARE! noi abbiamo 240 ma lo standard è 288
           curLine=0;
           VSyncState++;
           }
+        else
+          curLine++;
         break;
       case BOTTOM_BORDER:
     		m_SyncPin=1;
-        DMA0STAL = __builtin_dmaoffset(&blackline);     // ev. colore bordo...
-//        DMA0STAH = 0;
         if(curLine>=24) {
           curLine=0;
           VSyncState=FRONT_PORCH;
           }
+        else
+          curLine++;
+        DMA0STAL = __builtin_dmaoffset(&blackline);     // ev. colore bordo...
+//        DMA0STAH = 0;
         break;
       }
+
     DMA0CNT=widthDMA   -1;
 //    DMA0CNT=10;
     DMA0CONbits.CHEN = 1; // perché non abbiam messo continous
@@ -366,6 +376,7 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
 //    while(!SPI1STATbits.SPIRBF);    // non va... forse bisognerebbe gestire IRQ del DMA dummy/RX...
     __delay_us(4);
 		m_SyncPin=0;
+//    __delay_us(1);
 //    DMA0CONbits.CHEN = 0; //non serve
     DMA0STAL = __builtin_dmaoffset(&blackline);  // zeri... dovrebbe
 //    DMA0STAH = 0;

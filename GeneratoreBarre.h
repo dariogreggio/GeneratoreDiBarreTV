@@ -62,8 +62,10 @@ int drawCircle(WORD x1, WORD y1, WORD s, int c);
 int drawCircleFilled(WORD x1, WORD y1, WORD s, int c);
 int writeCharAt(WORD x, WORD y, char ch, int c);
 int cwrite(char ch);
+int writeString(const char *s);
 int writeStringAt(WORD x, WORD y, const char *s, int c);
 int screenCLS(void);
+void setCursor(int x,int y);
 int drawImage(const WORD *w);
 
 #endif
@@ -78,7 +80,7 @@ int drawImage(const WORD *w);
 #ifdef USA_DMA_8BIT
 #define TMR3BASE ((159*8)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
 #else
-#define TMR3BASE ((160*16)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#define TMR3BASE ((159*16)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
 #endif
 #else
 #define TMR3BASE (64000/(1000000000.0/(GetPeripheralClock())*1) /*4480*/)	//   64uS @320x240

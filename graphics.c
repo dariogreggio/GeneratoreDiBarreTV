@@ -252,6 +252,12 @@ int writeStringAt(WORD x, WORD y, const char *s, int c) {
 	return 1;	
 	}
 
+void setCursor(int x,int y) {
+  
+  cursor_x=x;
+  cursor_y=y;
+  }
+
 int cwrite(char ch) {
   
   writeCharAt(cursor_x*8,cursor_y*8,ch,1);
@@ -264,6 +270,12 @@ int cwrite(char ch) {
       cursor_y=0;   // finire scroll ecc
       }
     }
+  }
+
+int writeString(const char *s) {
+  
+  while(s)
+    cwrite(s++);
   }
 
 
