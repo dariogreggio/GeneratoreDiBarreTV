@@ -1,38 +1,116 @@
 
 
-
 #define SERNUM      1000
-#define VERNUMH     0
+#define VERNUMH     1
 #define VERNUML     1
 
 
-//#define FLASH_TIME 7
 #define USA_SW_RTC 1
 
+#define CR        0xd
+#define LF        0xa
+
+#define DMA_READY __attribute__((/*space(dma),*/aligned(256)))    // 
+
+#ifdef TTY_CGA
+#define SCREENSIZE_X 320
+#define SCREENSIZE_Y 240
+
+#define USA_DMA 1
+//#define USA_DMA_8BIT 1
 
 
-// il Timer0 conta ogni 62.5nSec*prescaler... (@32MHz CPUCLK => 16MHz) su PIC24
-#define TMR2BASE (27350 /*6260*/-10)		//   10Hz per timer
-#define TMR3BASE (223) // 3.2uS  (279)		//   4uS 
-#define TMR4BASE (18)		//   .25uS 
+enum __attribute((packed)) VSYNC_STATE {
+    FRONT_PORCH=0,
+    VSYNC,
+    BACK_PORCH,
+    TOP_BORDER,
+    VFRAME,
+    BOTTOM_BORDER
+    };
 
-enum TIPO_FIGURA {
+
+#ifdef USA_DMA
+#define VIDEO_BUFSIZE (((SCREENSIZE_X)/8+HORIZ_PORCH_COMP  +HORIZ_SHIFT_COMP)* (SCREENSIZE_Y /*+VERT_PORCH_COMP+VERT_SYNC_COMP*/)) 	// in WORD, v.
+
+//#define VERT_SYNC_COMP 15       // in effetti sarebbero 5+5+5 (o modif. x interlace) con short e long pulses..
+//#define VERT_PORCH_COMP 10
+#define VERT_SYNC_COMP 20       // in effetti sarebbero 5+5+5 (o modif. x interlace) con short e long pulses..
+#define VERT_PORCH_COMP 6
+#ifdef USA_DMA_8BIT
+#define HORIZ_SYNC_COMP 2  //2     // 4.7uS => 8% su 64uS totale @16bit
+#define HORIZ_PORCH_COMP 6      // 8uS => 12.5%
+// 15.625Hz, 52uS image = 160nS/pixel (320H)
+#define HORIZ_SHIFT_COMP 3  //((HORIZ_PORCH_COMP*6)/8)
+#else
+#define HORIZ_SYNC_COMP 1  //2     // 4.7uS => 8% su 64uS totale @16bit
+#define HORIZ_PORCH_COMP 2      // 8uS => 12.5%
+// 15.625Hz, 52uS image = 160nS/pixel (320H)
+#define HORIZ_SHIFT_COMP 2  //((HORIZ_PORCH_COMP*6)/8)
+#endif
+#else
+#define VIDEO_BUFSIZE (SCREENSIZE_X/8*SCREENSIZE_Y) 	// 
+#endif
+
+extern WORD DMA_READY videoRAM[VIDEO_BUFSIZE/2];
+
+int drawPixel(WORD x, WORD y, int c);
+int drawLine(WORD x1, WORD y1, WORD x2, WORD y2, int c);
+int drawRectangle(WORD x1, WORD y1, WORD x2, WORD y2, int c);
+int drawBar(WORD x1, WORD y1, WORD x2, WORD y2, int c);
+int drawCircle(WORD x1, WORD y1, WORD s, int c);
+int drawCircleFilled(WORD x1, WORD y1, WORD s, int c);
+int writeCharAt(WORD x, WORD y, char ch, int c);
+int cwrite(char ch);
+int writeStringAt(WORD x, WORD y, const char *s, int c);
+int screenCLS(void);
+int drawImage(const WORD *w);
+
+#endif
+
+
+
+// il Timer0 conta ogni 14.28nSec*prescaler... (@140MHz CPUCLK => 70MHz) su dsPIC33
+
+#define TMR2BASE (100000000L/(1000000000.0/(GetPeripheralClock())*256))		//   10Hz per timer
+#ifdef TTY_CGA
+#ifdef USA_DMA
+#ifdef USA_DMA_8BIT
+#define TMR3BASE ((159*8)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#else
+#define TMR3BASE ((160*16)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#endif
+#else
+#define TMR3BASE (64000/(1000000000.0/(GetPeripheralClock())*1) /*4480*/)	//   64uS @320x240
+#endif
+#else
+#define TMR3BASE (3200/(1000000000.0/(GetPeripheralClock())*1) /*224*/ /*223 overclock*/) // 3.2uS  (279)		//   4uS 
+#endif
+#define TMR4BASE (3)		//   .25uS 
+
+enum __attribute((packed)) TIPO_FIGURA {
 	NESSUNA,
 	RIGHE_VERTICALI,
 	RIGHE_ORIZZONTALI,
 	RETICOLO,
 	PUNTI,
+	CROCE,
 	SCACCHIERA,
 	CERCHIO,
+	BIANCO,
+	NERO,
+	MEZZO_ORIZZ,
+	MEZZO_VERT,
 	RUMORE
 	};
 
-struct SAVED_PARAMETERS {
+struct __attribute((packed)) SAVED_PARAMETERS {
 	WORD signature;
-	enum TIPO_FIGURA tipoFigura;
 	WORD Frequenza;			// num reticolo
+	enum TIPO_FIGURA tipoFigura;
 	BYTE Thickness;
 	BYTE Luminosita;
+	BYTE Reverse;
 	};
 
 extern struct SAVED_PARAMETERS configParms;
@@ -51,12 +129,6 @@ void saveSettings(void);
 void loadSettings(void);
 void resetSettings(void);
 
-
-
-
-void prepOutBuffer(BYTE );
-void clearOutBuffer(void);
-void prepStatusBuffer(BYTE);
 
 
 	

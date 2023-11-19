@@ -230,6 +230,17 @@ mLED_1=1;
 screenCLS();
 Beep();
 
+//  writeString(1, 3, CopyrString, 1);
+  drawPixel(0, 0, 1);
+  drawPixel(240, 40, 1);
+  writeStringAt(1, 24, "Riga 3", 1);
+  writeStringAt(8, 40, "Riga 5", 1);
+  writeStringAt(16, 48, "Riga 6", 1);
+  writeStringAt(160, 80, "Riga 10", 1);
+
+  drawLine(10,10, 200,100, 1) ;
+  drawRectangle(30,30,180,100,1);
+  drawBar(230,80,250,120,1);
 
   while(1) {
 
@@ -357,12 +368,10 @@ static void InitializeSystem(void) {
 //	_PLLDIV=302;						// M = _PLLDIV+2, 2..513
 //	_PLLPRE=6;						// N1 = _PLLPRE+2, 2..33
 //	_PLLPOST=0;						// N2 = _PLLPOST, 2 (0), 4 (1), 8 (3)
-//  OSCTUNbits.TUN=27;			//142MHz per Chroma
+  OSCTUNbits.TUN=27;			//142MHz per Chroma
   CLKDIVbits.PLLPRE = 0; // N1 = 2		// in quest'ordine, dice http://www.microchip.com/forums/FindPost/1011737 (ma non è vero...))
   CLKDIVbits.PLLPOST = 0; // N2 = 2  
-#warning overclock!
-  PLLFBD = 54; // M = PLLFBD + 2 = 55 => 100MHz ossia 50 che diviso 8 per SPI fa ~160nS per pixel
-  // v. sotto settaggio DMA e SPI 
+  PLLFBD = 74; // M = PLLFBD + 2 = 76
   
 #endif
 
@@ -499,17 +508,11 @@ skippa:
   SPI1STATbits.SPIEN=0;
 	IFS0bits.DMA0IF = 0;	 // Clear the interrupt flag!
   
+  widthDMA=SCREENSIZE_X/16 +HORIZ_PORCH_COMP;
 
   
   DMA0CON = 0;   // channel off
-#ifdef USA_DMA_8BIT
-  widthDMA=SCREENSIZE_X/8 +HORIZ_PORCH_COMP;
-  finire, è ancora sbagliato.. ma tanto cmq non serve a molto
-  DMA0CON = 0b0110000000000001;   // channel off, 8bit, RAM to periph, IRQ=full, register-postinc, one shot [continous]
-#else
-  widthDMA=SCREENSIZE_X/16 +HORIZ_PORCH_COMP;
   DMA0CON = 0b0010000000000001;   // channel off, 16bit, RAM to periph, IRQ=full, register-postinc, one shot [continous]
-#endif
   DMA0STAL = &videoRAM;  // transfer source physical address
   DMA0STAH = 0;
   DMA0CNT = HORIZ_SYNC_COMP;     // source size
@@ -527,13 +530,7 @@ skippa:
   IEC0bits.T3IE=0;
   T3CONbits.TON = 1;                    // start timer to generate triggers
   
-// bisogna fare attenzione: se DMA è più veloce di quanto escono i bit su SPI, si sovrappongono! v. sopra overclock (perché non c'è un divisore preciso qua)
-  
-#ifdef USA_DMA_8BIT
-	SPI1CON1=0b0001001100110110;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:4 & 1:3 (70:12=>~5.83MHz=>~160nS)
-#else
-	SPI1CON1=0b0001011100111010;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:4 & 1:2 (70:8=>~6.25MHz=>~160nS)
-#endif
+	SPI1CON1=0b0000011100110110;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:4 & 1:3 (70:12=>~5.83MHz=>~160nS)
   // è un pelo troppo lento, con DMA... e 1:8 è troppo veloce e lascia un gap ogni 16bit...
 //	SPI1CON1=0b0001011100100011;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:8 (70:6=>~5.83MHz=>~160nS)
 //	SPI1CON1=0b0001011100111010;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:8 (70:6=>~5.83MHz=>~160nS)
@@ -612,86 +609,11 @@ int UserInit(void) {
 	return 1;
 	}
 
-void plotInit(BYTE m) {
-  int i;
-  
-  screenCLS();
-  
-  if(!m) {
 
-//  writeString(1, 3, CopyrString, 1);
-    drawPixel(0, 0, 1);
-    drawPixel(240, 40, 1);
-    writeStringAt(1, 24, "Riga 3", 1);
-    writeStringAt(8, 40, "Riga 5", 1);
-    writeStringAt(16, 48, "Riga 6", 1);
-    writeStringAt(160, 80, "Riga 10", 1);
-
-    drawLine(10,10, 200,100, 1) ;
-    drawRectangle(30,30,180,100,1);
-    drawBar(230,80,250,120,1);
-    }
-  else {             // monoscopio!
-    drawRectangle(0,0,SCREENSIZE_X-1,SCREENSIZE_Y-1,1);
-    for(i=0; i<SCREENSIZE_X; i+=SCREENSIZE_X/12)
-      drawLine(i,0,i,SCREENSIZE_Y-1,1);
-    for(i=0; i<SCREENSIZE_Y; i+=SCREENSIZE_Y/9)
-      drawLine(0,i,SCREENSIZE_X-1,i,1);
-    drawCircle(SCREENSIZE_X/2,SCREENSIZE_Y/2,(SCREENSIZE_Y-2)/2,1);
-    drawLine(SCREENSIZE_X/2+(SCREENSIZE_Y-2)/2,SCREENSIZE_Y/2,SCREENSIZE_X/2+(SCREENSIZE_Y-2)/2,SCREENSIZE_Y/2,1);
-    drawLine(SCREENSIZE_X/2,SCREENSIZE_Y/2-(SCREENSIZE_Y-2)/2,SCREENSIZE_X/2,SCREENSIZE_Y/2+(SCREENSIZE_Y-2)/2,1);
-    drawCircle(SCREENSIZE_X/2,SCREENSIZE_Y/2,(SCREENSIZE_Y-2)/2/2,1);
-    drawCircleFilled(SCREENSIZE_X/2,SCREENSIZE_Y/2,(SCREENSIZE_Y-2)/10/2,1);
-    drawLine(SCREENSIZE_X/4.5,SCREENSIZE_Y/4.5,SCREENSIZE_X/2.2,SCREENSIZE_Y/3,1);
-    drawLine(SCREENSIZE_X/2.2,SCREENSIZE_Y/4.5,SCREENSIZE_X/4.5,SCREENSIZE_Y/3,1);
-    drawLine(SCREENSIZE_X-SCREENSIZE_X/4.5,SCREENSIZE_Y-SCREENSIZE_Y/3,SCREENSIZE_X-SCREENSIZE_X/2.2,SCREENSIZE_Y-SCREENSIZE_Y/4.5,1);
-    drawLine(SCREENSIZE_X-SCREENSIZE_X/2.2,SCREENSIZE_Y-SCREENSIZE_Y/3,SCREENSIZE_X-SCREENSIZE_X/4.5,SCREENSIZE_Y-SCREENSIZE_Y/4.5,1);
-    drawCircle((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/8)*1+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircle((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*7-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/8)*7+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircle((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/8)*1+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircle((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*7-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/8)*7+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
-    for(i=0; i<8; i++) {
-      drawLine(SCREENSIZE_X/5,3+i*2,SCREENSIZE_X/5+SCREENSIZE_X/20,3+i*2,1);
-      drawLine(SCREENSIZE_X*3/5,3+i*2,SCREENSIZE_X*3/5+SCREENSIZE_X/20,3+i*2,1);
-      drawLine(SCREENSIZE_X/5,SCREENSIZE_Y/2+3+i*2,SCREENSIZE_X/5+SCREENSIZE_X/20,SCREENSIZE_Y/2+3+i*2,1);
-      drawLine(SCREENSIZE_X*3/5,SCREENSIZE_Y/2+3+i*2,SCREENSIZE_X*3/5+SCREENSIZE_X/20,SCREENSIZE_Y/2+3+i*2,1);
-      drawLine(SCREENSIZE_X/5,SCREENSIZE_Y-(3+i*2),SCREENSIZE_X/5+SCREENSIZE_X/20,SCREENSIZE_Y-(3+i*2),1);
-      drawLine(SCREENSIZE_X*3/5,SCREENSIZE_Y-(3+i*2),SCREENSIZE_X*3/5+SCREENSIZE_X/20,SCREENSIZE_Y-(3+i*2),1);
-      }
-    drawBar(1,SCREENSIZE_Y/2-SCREENSIZE_Y/9/2,SCREENSIZE_X/12,SCREENSIZE_Y/2+SCREENSIZE_Y/2/9,1);
-    drawBar(SCREENSIZE_X-SCREENSIZE_X/12,SCREENSIZE_Y/2-SCREENSIZE_Y/9/2,
-            SCREENSIZE_X-1,SCREENSIZE_Y/2+SCREENSIZE_Y/2/9,1);
-    for(i=0; i<9; i++) {
-      drawLine(SCREENSIZE_X/4+(pow(9-i,2)),SCREENSIZE_Y-(5+i*4)-1,SCREENSIZE_X*3/4-(pow(9-i,2)),SCREENSIZE_Y-(5+i*4)-1,1);
-      drawLine(SCREENSIZE_X/4+(pow(9-i,2)),SCREENSIZE_Y-(5+i*4),SCREENSIZE_X*3/4-(pow(9-i,2)),SCREENSIZE_Y-(5+i*4),1);
-      }
-    drawRectangle(SCREENSIZE_X/3,SCREENSIZE_Y*7/9-4,SCREENSIZE_X*2/3,SCREENSIZE_Y*7/9+4,1);
-    for(i=1; i<7; i++)
-      drawLine(SCREENSIZE_X/3+i*(SCREENSIZE_X/3/7),SCREENSIZE_Y*7/9-4,SCREENSIZE_X/3+i*(SCREENSIZE_X/3/7),SCREENSIZE_Y*7/9+4,1);
-    writeStringAt(SCREENSIZE_X/2-21, SCREENSIZE_Y/9+2, "G.Dar", 1);
-    }
-  }
 void UserTasks(void) {
 	static BYTE oldSw=15,swPressed=0;
 	static WORD cnt=0,cnt2=0;
-  static BYTE inited=0,plotmode=0;
 
-  if(!inited) {
-    inited=1;
-    plotInit(plotmode);
-    }
 
 	if(second_10) {
 		second_10=0;
@@ -713,15 +635,11 @@ void UserTasks(void) {
       if(!(oldSw & 1)) {
         if(swPressed>=TIME_TO_LONG_CLICK) {
           Beep();
-          configParms.Reverse=!configParms.Reverse;
-          plotInit(plotmode);
           }
         else {
           static BYTE aChar=' ';
           putcUART1(aChar++);
           aChar &= 127;
-          plotmode=!plotmode;
-          plotInit(plotmode);
           }
     		swPressed=0;
         }

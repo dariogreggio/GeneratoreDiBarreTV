@@ -23,6 +23,14 @@ extern volatile BYTE second_10;
 BYTE divider1s;
 extern volatile DWORD milliseconds;
 
+extern BYTE videoTextRAM[(320/8)*(240/8)];
+extern WORD videoCharPointer;
+extern WORD verticalLines,horizontalPixels;
+static WORD blackline[320/2+HORIZ_PORCH_COMP  +HORIZ_SHIFT_COMP]={0};
+//static WORD chekeredline[320/2+HORIZ_PORCH_COMP   +HORIZ_SHIFT_COMP]={0x5555}; per test!
+WORD widthDMA;
+volatile enum VSYNC_STATE VSyncState=FRONT_PORCH;
+
 
 /** VECTOR REMAPPING ***********************************************/
     #if defined(PROGRAMMABLE_WITH_USB_HID_BOOTLOADER)
@@ -82,14 +90,18 @@ void __attribute__ (( interrupt, no_auto_psv )) _T2Interrupt(void) {
 
 
 
-WORD *pVideo;
-BYTE soloSync=0;
+static WORD *pVideo;
+static BYTE soloSync=0;
 static WORD curLine=0;
-void __attribute__ (( interrupt, shadow, no_auto_psv )) _T3Interrupt(void) {
-#warning OCCHIO usare registri con XC e ottimizzazioni 2..
+static BYTE spi_cnt=0;
+#ifndef USA_DMA
+void __attribute__ ((interrupt, shadow, no_auto_psv)) _T3Interrupt(void) {
+#warning OCCHIO usare registri in asm con XC e ottimizzazioni 2..
 	switch(curLine) {
 		case 0:			// 
 			pVideo=&videoRAM[0];
+			IFS0bits.SPI1IF=1;    // serve??
+//			spi_cnt=0;
 		case 1:
 		case 2:			
 		case 3:
@@ -163,6 +175,7 @@ void __attribute__ (( interrupt, shadow, no_auto_psv )) _T3Interrupt(void) {
 		case 307:
 		case 308:
 			soloSync=1;
+//			spi_cnt=0;
 			IEC0bits.SPI1IE=1;		
 			IFS0bits.SPI1IF=1;		
 			break;
@@ -170,6 +183,7 @@ void __attribute__ (( interrupt, shadow, no_auto_psv )) _T3Interrupt(void) {
 			break;
 		case 310:			// VSync
 			m_SyncPin=0;
+			break;
 		case 311:
 			break;
 		case 312:
@@ -181,36 +195,40 @@ void __attribute__ (( interrupt, shadow, no_auto_psv )) _T3Interrupt(void) {
 
 		default:
 			soloSync=0;
+//			spi_cnt=0;
 			IEC0bits.SPI1IE=1;
-//			IFS0bits.SPI1IF=1;		//myWriteSPI1(0);			// scatena 1° IRQ!
-      SPI1BUF=0;
-
+			IFS0bits.SPI1IF=1;		//myWriteSPI1(0);			// scatena 1° IRQ!
 			break;
 		}
 
 	curLine++;
-//	__builtin_btg((unsigned int *)&LATB,12);
+	__builtin_btg((unsigned int *)&LATB,12);
 
 	IFS0bits.T3IF = 0; 			//Clear the Timer3 interrupt status flag
 	//T3_Clear_Intr_Status_Bit; 
-//__asm__ ("pop.s");
-
 	}
 
-void __attribute__ (( interrupt, shadow, no_auto_psv)) _SPI1Interrupt(void) {
-	static BYTE cnt=0;
+void __attribute__ ((interrupt, shadow, no_auto_psv)) _SPI1Interrupt(void) {
+
 
 // http://www.batsocks.co.uk/readme/video_timing.htm
-  switch(cnt) {
-		case 0:						// back porch 5.7uS (16bit @6MHz, x2)
+  switch(spi_cnt) {
+		case 0:         // Hsync
+			m_SyncPin=0;
+      SPI1BUF=0;    // 4.7uS circa
       SPI1BUF=0;
-      SPI1BUF=0;
-			cnt++;
+			spi_cnt++;
 			break;
 
-		case 1:
-		case 2:   // 8x16bit, 160nS l'uno => 
-//	Nop(); //__builtin_btg(&LATB,2);	mmm SENZA almeno una NOP qua, con ottimizzazione a 1 non va +...
+		case 1:						// back porch 5.7uS (16bit @6MHz, x2)
+			m_SyncPin=1;
+      SPI1BUF=0;
+      SPI1BUF=0;
+			spi_cnt++;
+			break;
+
+		case 2:
+		case 3:   // 8x16bit, 160nS l'uno => 
 			if(soloSync) {
 //Nop();Nop();Nop();Nop();Nop();Nop();			// per omogeneità..
         SPI1BUF=0;
@@ -231,12 +249,11 @@ void __attribute__ (( interrupt, shadow, no_auto_psv)) _SPI1Interrupt(void) {
         SPI1BUF=*pVideo++;
         SPI1BUF=*pVideo++;
         SPI1BUF=*pVideo++;
-			}			// soloSync
-			cnt++;
+        }			// soloSync
+			spi_cnt++;
 			break;
 
- 		case 3:   // 4x16bit, 160nS l'uno => 
-//	Nop(); //__builtin_btg(&LATB,2);	mmm SENZA almeno una NOP qua, con ottimizzazione a 1 non va +...
+ 		case 4:   // 4x16bit, 160nS l'uno => 
 			if(soloSync) {
 //Nop();Nop();Nop();Nop();Nop();Nop();			// per omogeneità..
         SPI1BUF=0;
@@ -249,36 +266,120 @@ void __attribute__ (( interrupt, shadow, no_auto_psv)) _SPI1Interrupt(void) {
         SPI1BUF=*pVideo++;
         SPI1BUF=*pVideo++;
         SPI1BUF=*pVideo++;
-			}			// soloSync
-			cnt++;
-			break;
-
-		case 4:
-      SPI1BUF=0;  	// 1.6uS front porch
-			cnt++;
+        }			// soloSync
+			spi_cnt++;
 			break;
 
 		case 5:
-			m_SyncPin=0;
-      SPI1BUF=0;    // 4.7uS circa
-//      SPI1BUF=0;
-			cnt++;
-			break;
-
-		case 6:
-			m_SyncPin=1;
+      SPI1BUF=0;  	// 1.6uS front porch
 			IEC0bits.SPI1IE=0;
-			cnt=0;
+			spi_cnt=0;
 			break;
 		}
 
-//fine:
-	__builtin_btg(&LATB,12);
+//	__builtin_btg(&LATB,12);
+
 	IFS0bits.SPI1IF = 0; // Clear the Interrupt flag
 	}
+#endif
+
+#ifdef USA_DMA
+void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
+//http://martin.hinner.info/vga/pal.html
+//http://www.doom9.org/index.html?/capture/analogue_video.html
+  
+  if(DMA0CNT==HORIZ_SYNC_COMP /* 8% circa */) {
+    curLine++;
+//    DMA0CONbits.CHEN = 0; //non serve
+    switch(VSyncState) {
+      case FRONT_PORCH:   // diminuendo qua, scende; aumentando sale
+        if(curLine>=(VERT_PORCH_COMP/2)) {   // front porch % circa
+          curLine=0;
+    			m_SyncPin=0;
+        	__builtin_btg(&LATB,12);    // frame counter :) v. PC_PIC
+          VSyncState++;
+          }
+        else
+          m_SyncPin=1;
+        DMA0STAL = __builtin_dmaoffset(&blackline);
+//        DMA0STAH = 0;
+        break;
+      case VSYNC:
+        if(curLine>=VERT_SYNC_COMP) {   // 15 linee circa
+          curLine=0;
+    			m_SyncPin=1;
+          // ovvero (dice) potrebbero essere tanti impulsi da 1/2 riga (32uS)..
+          VSyncState++;
+          }
+        else
+          m_SyncPin=0;    //opzionale
+        DMA0STAL = __builtin_dmaoffset(&blackline);
+//        DMA0STAH = 0;
+        break;
+      case BACK_PORCH:
+  			m_SyncPin=1;
+        // TOTALE 24! (312.5 - 288)
+        if(curLine>=(VERT_PORCH_COMP/2)) {   // back porch % circa
+          curLine=0;
+          VSyncState++;
+          }
+        DMA0STAL = __builtin_dmaoffset(&blackline);
+//        DMA0STAH = 0;
+        break;
+      case TOP_BORDER:
+  			m_SyncPin=1;
+        DMA0STAL = __builtin_dmaoffset(&blackline);
+//        DMA0STAH = 0;
+        if(curLine>=24) {
+          curLine=0;
+          VSyncState++;
+          }
+        break;
+      case VFRAME:
+  			m_SyncPin=1;
+        DMA0STAL = /*__builtin_dmaoffset*/ ((WORD*)&videoRAM)+curLine*widthDMA;  // transfer source physical address
+
+        
+//        DMA0STAL = __builtin_dmaoffset(&chekeredline);
+        
+        //        DMA0STAH = 0;
+        if(curLine>=SCREENSIZE_Y) {   // BISOGNa CENTRARE! noi abbiamo 240 ma lo standard è 288
+          curLine=0;
+          VSyncState++;
+          }
+        break;
+      case BOTTOM_BORDER:
+    		m_SyncPin=1;
+        DMA0STAL = __builtin_dmaoffset(&blackline);     // ev. colore bordo...
+//        DMA0STAH = 0;
+        if(curLine>=24) {
+          curLine=0;
+          VSyncState=FRONT_PORCH;
+          }
+        break;
+      }
+    DMA0CNT=widthDMA   -1;
+//    DMA0CNT=10;
+    DMA0CONbits.CHEN = 1; // perché non abbiam messo continous
+    }
+  else {
+//    while(!SPI1STATbits.SPIRBF);    // non va... forse bisognerebbe gestire IRQ del DMA dummy/RX...
+    __delay_us(4);
+		m_SyncPin=0;
+//    DMA0CONbits.CHEN = 0; //non serve
+    DMA0STAL = __builtin_dmaoffset(&blackline);  // zeri... dovrebbe
+//    DMA0STAH = 0;
+    DMA0CNT=HORIZ_SYNC_COMP;
+    DMA0CONbits.CHEN = 1; // perché non abbiam messo continous
+    }
+
+	IFS0bits.DMA0IF = 0;	 // Clear the interrupt flag!
+  }
+#endif
+
 
 BYTE ByteRec;
-void __attribute__ (( interrupt, no_auto_psv )) _U1RXInterrupt(void) {
+void __attribute__ ((interrupt, no_auto_psv )) _U1RXInterrupt(void) {
 
   if(U1STAbits.FERR) {
 		U1STAbits.FERR=0;
@@ -294,6 +395,8 @@ void __attribute__ (( interrupt, no_auto_psv )) _U1RXInterrupt(void) {
 //	while(DataRdyUART1()) {	// bah non si capisce se ha senso.. credo di no cmq
 	  ByteRec = U1RXREG;
 
+    cwrite(ByteRec);
+    
 //		m_Led2Bit ^= 1;			// ***test
 //		CommStatus.FRAME_REC=1;
 
