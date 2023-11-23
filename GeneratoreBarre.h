@@ -4,6 +4,9 @@
 #define VERNUMH     1
 #define VERNUML     1
 
+// https://github.com/Picatout/vpc-32/blob/master/hardware/tvout/ntsc.c
+// https://www.gamedev.net/blog/161/entry-2165446-dspic33-vdc-with-glcd-or-pal-tv-output/
+
 
 #define USA_SW_RTC 1
 
@@ -17,7 +20,7 @@
 #define SCREENSIZE_Y 240
 
 #define USA_DMA 1
-//#define USA_DMA_8BIT 1
+#define USA_DMA_8BIT 1
 
 
 enum __attribute((packed)) VSYNC_STATE {
@@ -31,20 +34,21 @@ enum __attribute((packed)) VSYNC_STATE {
 
 
 #ifdef USA_DMA
-#define VIDEO_BUFSIZE (((SCREENSIZE_X)/8+HORIZ_PORCH_COMP  +HORIZ_SHIFT_COMP)* (SCREENSIZE_Y /*+VERT_PORCH_COMP+VERT_SYNC_COMP*/)) 	// in WORD, v.
+#define VIDEO_BUFSIZE (((SCREENSIZE_X)/8+HORIZ_PORCH_COMP*2)* (SCREENSIZE_Y /*+VERT_PORCH_COMP+VERT_SYNC_COMP*/)) 	// in WORD, v.
 
 //#define VERT_SYNC_COMP 15       // in effetti sarebbero 5+5+5 (o modif. x interlace) con short e long pulses..
 //#define VERT_PORCH_COMP 10
 #define VERT_SYNC_COMP 20       // in effetti sarebbero 5+5+5 (o modif. x interlace) con short e long pulses..
 #define VERT_PORCH_COMP 6
+  // occhio DMA conta fino a 0 compreso! v. interrupt
 #ifdef USA_DMA_8BIT
-#define HORIZ_SYNC_COMP 2  //2     // 4.7uS => 8% su 64uS totale @16bit
+#define HORIZ_SYNC_COMP 2  //2     // 0=3.5uS, 1=6; (4.7uS => 8% su 64uS totale @16bit
 #define HORIZ_PORCH_COMP 6      // 8uS => 12.5%
 // 15.625Hz, 52uS image = 160nS/pixel (320H)
 #define HORIZ_SHIFT_COMP 3  //((HORIZ_PORCH_COMP*6)/8)
 #else
 #define HORIZ_SYNC_COMP 1  //2     // 4.7uS => 8% su 64uS totale @16bit
-#define HORIZ_PORCH_COMP 2      // 8uS => 12.5%
+#define HORIZ_PORCH_COMP 3      // 8uS => 12.5%
 // 15.625Hz, 52uS image = 160nS/pixel (320H)
 #define HORIZ_SHIFT_COMP 2  //((HORIZ_PORCH_COMP*6)/8)
 #endif
@@ -78,17 +82,20 @@ int drawImage(const WORD *w);
 #ifdef TTY_CGA
 #ifdef USA_DMA
 #ifdef USA_DMA_8BIT
-#define TMR3BASE ((159*8)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#define TMR3BASE ((156*8)/(1000000000.0/(GetPeripheralClock())*1))	//   160nS/pixel @320x240
+//anche qua c'è sempre un ritardino minimo di 100nS... ossia di un SPI cycle, non è chiaro se si può eliminare
+#define widthDMA (SCREENSIZE_X/8 +HORIZ_PORCH_COMP)
 #else
-#define TMR3BASE ((159*16)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#define TMR3BASE ((150*16)/(1000000000.0/(GetPeripheralClock())*1) /*11.36*/)	//   160nS/pixel @320x240
+#define widthDMA (SCREENSIZE_X/16 +HORIZ_PORCH_COMP)
 #endif
 #else
 #define TMR3BASE (64000/(1000000000.0/(GetPeripheralClock())*1) /*4480*/)	//   64uS @320x240
 #endif
 #else
 #define TMR3BASE (3200/(1000000000.0/(GetPeripheralClock())*1) /*224*/ /*223 overclock*/) // 3.2uS  (279)		//   4uS 
-#endif
 #define TMR4BASE (3)		//   .25uS 
+#endif
 
 enum __attribute((packed)) TIPO_FIGURA {
 	NESSUNA,

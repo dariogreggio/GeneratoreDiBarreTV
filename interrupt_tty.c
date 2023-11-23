@@ -28,7 +28,6 @@ extern WORD videoCharPointer;
 extern WORD verticalLines,horizontalPixels;
 static WORD blackline[320/2+HORIZ_PORCH_COMP  +HORIZ_SHIFT_COMP]={0};
 //static WORD chekeredline[320/2+HORIZ_PORCH_COMP   +HORIZ_SHIFT_COMP]={0x5555}; per test!
-WORD widthDMA;
 volatile enum VSYNC_STATE VSyncState=FRONT_PORCH;
 
 
@@ -289,6 +288,12 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
 //http://www.doom9.org/index.html?/capture/analogue_video.html
   
   if(DMA0CNT==HORIZ_SYNC_COMP /* 8% circa */) {
+//    while(!SPI1STATbits.SPIRBF);    // non va... forse bisognerebbe gestire IRQ del DMA dummy/RX...
+#ifdef USA_DMA_8BIT
+    __delay_us(1);
+#else
+    __delay32(90); //2.0us
+#endif
 
 //    DMA0CONbits.CHEN = 0; //non serve
     switch(VSyncState) {
@@ -334,7 +339,7 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
         break;
       case TOP_BORDER:
   			m_SyncPin=1;
-        if(curLine>=24) {
+        if(curLine>=24  -3) {
           curLine=0;
           VSyncState++;
           }
@@ -345,7 +350,11 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
         break;
       case VFRAME:
   			m_SyncPin=1;
+#ifdef USA_DMA_8BIT
+        DMA0STAL = /*__builtin_dmaoffset*/ ((BYTE*)&videoRAM)+curLine*(SCREENSIZE_X/8 +HORIZ_PORCH_COMP*2);  // transfer source physical address
+#else
         DMA0STAL = /*__builtin_dmaoffset*/ ((WORD*)&videoRAM)+curLine*widthDMA;  // transfer source physical address
+#endif
 //        DMA0STAL = __builtin_dmaoffset(&chekeredline);
 //        DMA0STAH = 0;
         if(curLine>=SCREENSIZE_Y) {   // BISOGNa CENTRARE! noi abbiamo 240 ma lo standard è 288
@@ -357,7 +366,7 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
         break;
       case BOTTOM_BORDER:
     		m_SyncPin=1;
-        if(curLine>=24) {
+        if(curLine>=24  +3) {
           curLine=0;
           VSyncState=FRONT_PORCH;
           }
@@ -374,7 +383,12 @@ void __attribute__ ((interrupt, shadow, no_auto_psv)) _DMA0Interrupt(void) {
     }
   else {
 //    while(!SPI1STATbits.SPIRBF);    // non va... forse bisognerebbe gestire IRQ del DMA dummy/RX...
-    __delay_us(4);
+#ifdef USA_DMA_8BIT
+    __delay_us(1);
+#else
+ //   __delay_us(2);
+    __delay32(90); //2.0us
+#endif
 		m_SyncPin=0;
 //    __delay_us(1);
 //    DMA0CONbits.CHEN = 0; //non serve

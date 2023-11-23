@@ -6,7 +6,7 @@
  				boards supported by the MCHPFSUSB stack.  See release notes for
  				support matrix.  This demo can be modified for use on other hardware
  				platforms.
- Complier:  	Microchip C18 (for PIC18), C30 (for PIC24), C32 (for PIC32)
+ Compiler:  	Microchip C18 (for PIC18), C30 (for PIC24), C32 (for PIC32)
  Company:		Microchip Technology, Inc.
 
  Software License Agreement:
@@ -128,14 +128,13 @@ _FICD( ICS_PGD3 & JTAGEN_OFF )		//
 /** VARIABLES ******************************************************/
 
 
-static const char CopyrString[]= {'T','e','r','m','i','n','a','l','e',' ','t','e','s','t','o',' ','3','2','x','2','4',
-	'v',VERNUMH+'0','.',VERNUML/10+'0',(VERNUML % 10)+'0', ' ','1','8','/','1','1','/','2','3', 0 };
+static const char CopyrString[]= {'T','e','r','m','i','n','a','l','e',' ','t','e','s','t','o',' ','3','2','x','2','4',' ',
+	'v',VERNUMH+'0','.',VERNUML/10+'0',(VERNUML % 10)+'0', ' ','2','3','/','1','1','/','2','3', 0 };
 
 #warning RICONTROLLARE EEprom emulata! non andava ago 21 (forse era errato il check) e modificata libreria flashoperations
 
 
 WORD videoRAM[VIDEO_BUFSIZE/2];
-extern WORD widthDMA;
 BYTE cursor_x,cursor_y;
 
 volatile WORD tick10=0;
@@ -186,12 +185,7 @@ int main(void) {
 mLED_1=0;
 
 
-/*
-    TRISF=0;TRISB=0;
-    while(1) {
-      LATF ^= 0xffff;
-      ClrWdt();
-    }*/
+
 
 #ifndef __DEBUG
 	__delay_ms(50);		// vale *20~ non essendoci ancora PLL!
@@ -208,6 +202,12 @@ mLED_1=0;
 mLED_1=1;
 
 
+  /*  TRISB=0;
+    while(1) {
+      LATB ^= 0xffff;
+      __delay32(100); //2.2us
+//          __delay_us(2);
+    }*/
 
 
 
@@ -360,8 +360,12 @@ static void InitializeSystem(void) {
 //  OSCTUNbits.TUN=27;			//142MHz per Chroma
   CLKDIVbits.PLLPRE = 0; // N1 = 2		// in quest'ordine, dice http://www.microchip.com/forums/FindPost/1011737 (ma non è vero...))
   CLKDIVbits.PLLPOST = 0; // N2 = 2  
-#warning overclock!
-  PLLFBD = 53; // M = PLLFBD + 2 = 55 => 100MHz ossia 50 che diviso 8 per SPI fa ~160nS per pixel
+//#warning overclock!
+#ifdef USA_DMA_8BIT
+  PLLFBD = 54; // M = PLLFBD + 2 = 54 => 100MHz ossia 50 che diviso 8 per SPI fa ~160nS per pixel
+#else
+  PLLFBD = 53;
+#endif
   // v. sotto settaggio DMA e SPI 
   // a seconda dei valori si crea uno "sfrigolio" orizzontale... così pare ok
   
@@ -499,16 +503,14 @@ skippa:
 #ifdef USA_DMA
   SPI1STATbits.SPIEN=0;
 	IFS0bits.DMA0IF = 0;	 // Clear the interrupt flag!
-  
 
   
   DMA0CON = 0;   // channel off
 #ifdef USA_DMA_8BIT
-  widthDMA=SCREENSIZE_X/8 +HORIZ_PORCH_COMP;
-  finire, è ancora sbagliato.. ma tanto cmq non serve a molto
+//  finire, è ancora sbagliato.. ma tanto cmq non serve a molto
   DMA0CON = 0b0110000000000001;   // channel off, 8bit, RAM to periph, IRQ=full, register-postinc, one shot [continous]
 #else
-  widthDMA=SCREENSIZE_X/16 +HORIZ_PORCH_COMP;
+//  widthDMA=SCREENSIZE_X/16 +HORIZ_PORCH_COMP;
   DMA0CON = 0b0010000000000001;   // channel off, 16bit, RAM to periph, IRQ=full, register-postinc, one shot [continous]
 #endif
   DMA0STAL = &videoRAM;  // transfer source physical address
@@ -531,9 +533,9 @@ skippa:
 // bisogna fare attenzione: se DMA è più veloce di quanto escono i bit su SPI, si sovrappongono! v. sopra overclock (perché non c'è un divisore preciso qua)
   
 #ifdef USA_DMA_8BIT
-	SPI1CON1=0b0001001100110110;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:4 & 1:3 (70:12=>~5.83MHz=>~160nS)
+	SPI1CON1=0b0001001100100111;    // disable SCK; SMP=H; CLKPOL=H; 8bit; 1:4 & 1:3 (70:12=>~5.83MHz=>~160nS)
 #else
-	SPI1CON1=0b0001011100111010;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:4 & 1:2 (70:8=>~6.25MHz=>~160nS)
+	SPI1CON1=0b0001011100100111;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:7 (70:8=>~6.25MHz=>~160nS)
 #endif
   // è un pelo troppo lento, con DMA... e 1:8 è troppo veloce e lascia un gap ogni 16bit...
 //	SPI1CON1=0b0001011100100011;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:8 (70:6=>~5.83MHz=>~160nS)
@@ -546,7 +548,7 @@ skippa:
   
   DMA0CONbits.CHEN = 1; // turn on DMA channel 0
   
-  MSTRPR=0x0020;      // priorità a DMA  
+  MSTRPR=0x0020;      // priorità a DMA  (migliora di poco)
 #endif
 
 
@@ -626,10 +628,10 @@ void plotInit(BYTE m) {
     writeStringAt(8, 40, "Riga 5", 1);
     writeStringAt(16, 48, "Riga 6", 1);
     writeStringAt(160, 80, "Riga 10", 1);
-    setCursor(1,12);
+    setCursor(0,16);
   writeString(CopyrString);
 
-    drawLine(10,10, 200,100, 1) ;
+    drawLine(10,110, 250,200, 1) ;
     drawRectangle(30,30,180,100,1);
     drawBar(230,80,250,120,1);
     }
@@ -657,33 +659,36 @@ void plotInit(BYTE m) {
     drawLine(SCREENSIZE_X-1-SCREENSIZE_X/2.5,SCREENSIZE_Y-1-SCREENSIZE_Y/3,
             SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y-1-SCREENSIZE_Y/4.5,1);
     
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,0);
+    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,0);
     //spostare verso bordi o rimpicciolire
-    drawCircle((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/8)*1+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,0);
-    drawCircle((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*7-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/8)*7+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,0);
-    drawCircle((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*1-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/8)*1+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,0);
-    drawCircle((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.5/2,1);
-    drawLine((SCREENSIZE_X/8)*7-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/8)*7+(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.5/2,(SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.5/2,1);
-    drawCircleFilled((SCREENSIZE_X/8)*7,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
+    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,1);
+    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,1);
+    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
+    
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,0);
+    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,1);
+    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,1);
+    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
+    
+    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,0);
+    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,1);
+    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,1);
+    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
+    
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,0);
+    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,1);
+    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,1);
+    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
     
     for(i=0; i<8; i++) {
       drawLine(SCREENSIZE_X/4.6,3+i*2,SCREENSIZE_X/4.6+SCREENSIZE_X/20,3+i*2,1);
       drawLine(SCREENSIZE_X*3/4.2,3+i*2,SCREENSIZE_X*3/4.2+SCREENSIZE_X/20,3+i*2,1);
-      drawLine(SCREENSIZE_X/5,SCREENSIZE_Y/2+i*2,SCREENSIZE_X/5+SCREENSIZE_X/20,SCREENSIZE_Y/2+i*2,1);
-      drawLine(SCREENSIZE_X*3/3.8,SCREENSIZE_Y/2+i*2,SCREENSIZE_X*3/3.8+SCREENSIZE_X/20,SCREENSIZE_Y/2+i*2,1);
+      drawLine(SCREENSIZE_X/5,SCREENSIZE_Y/2-10+i*2,SCREENSIZE_X/5+SCREENSIZE_X/20,SCREENSIZE_Y/2-10+i*2,1);
+      drawLine(SCREENSIZE_X*3/3.8,SCREENSIZE_Y/2-10+i*2,SCREENSIZE_X*3/3.8+SCREENSIZE_X/20,SCREENSIZE_Y/2-10+i*2,1);
       drawLine(SCREENSIZE_X/4.6,SCREENSIZE_Y-(3+i*2),SCREENSIZE_X/4.6+SCREENSIZE_X/20,SCREENSIZE_Y-(3+i*2),1);
       drawLine(SCREENSIZE_X*3/4.2,SCREENSIZE_Y-(3+i*2),SCREENSIZE_X*3/4.2+SCREENSIZE_X/20,SCREENSIZE_Y-(3+i*2),1);
       }
