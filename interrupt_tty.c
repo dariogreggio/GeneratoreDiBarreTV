@@ -69,8 +69,6 @@ void _ISR __attribute__((__no_auto_psv__)) _StackError(void) {
 void __attribute__ (( interrupt, no_auto_psv )) _T2Interrupt(void) {
 // dev'essere 10Hz
 
-//	WriteTimer2(0);	// WRITETIMER0(0) dovrebbe essere la macro!
-//  TMR2=0;		non serve su PIC24...
 //	mLED_1_Toggle(); 
 //	SD_CS^=1;
 

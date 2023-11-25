@@ -12,7 +12,7 @@ const WORD bitLUT[16]= {128,64,32,16,8,4,2,1, 32768,16384,8192,4096,2048,1024,51
 #else
 const WORD bitLUT[16]= {32768,16384,8192,4096,2048,1024,512,256, 128,64,32,16,8,4,2,1};
 #endif
-extern BYTE cursor_x,cursor_y;
+extern BYTE cursor_x,cursor_y,cursor_mode;
 
 #define max(a,b) ((a)>(b) ? (a) : (b))
 #define abs(a) ((a)>=0 ? (a) : (-a))
@@ -26,7 +26,11 @@ int drawPixel(WORD x, WORD y, int c) {
 		return 0;
 
 #ifdef USA_DMA
+#ifdef USA_DMA_8BIT
   i=(((WORD)SCREENSIZE_X)/16  +HORIZ_PORCH_COMP)*y + x/16   +HORIZ_SHIFT_COMP;
+#else
+  i=(((WORD)SCREENSIZE_X)/16  +HORIZ_PORCH_COMP)*y + x/16   +HORIZ_SHIFT_COMP;
+#endif
 #else
 	i=(SCREENSIZE_X/16)*y+(x/16);
 #endif
@@ -215,7 +219,7 @@ int drawCircleFilled(WORD x0, WORD y0, WORD r, int color) {
 
 int writeCharAt(WORD x, WORD y, char ch, int c) {
 	WORD xc,yc;
-	const BYTE *p=&font8x8_basic[(BYTE)ch];
+	const BYTE *p=&font8x8_basic[(BYTE)ch & 0x7f];
 	BYTE cmask;
 
 	for(yc=0; yc<8; yc++,p++) {
@@ -259,23 +263,51 @@ void setCursor(int x,int y) {
   }
 
 int cwrite(char ch) {
-  
-  writeCharAt(cursor_x*8,cursor_y*8,ch,1);
-  cursor_x++;
-  if(cursor_x>=SCREENSIZE_X/8) {
-    cursor_x=0;
-    cursor_y++;
-    if(cursor_y>=SCREENSIZE_Y/8) {    
-      
-      cursor_y=0;   // finire scroll ecc
-      }
-    }
+	BYTE oldcursor,oldreverse;
+
+  switch(ch) {
+    case 7:
+      Beep();
+      break;
+    case 12:
+      screenCLS();
+      break;
+    case 13:
+      cursor_x=0;
+      break;
+    case 10:
+      goto newline;
+      break;
+    default:
+			oldcursor=cursor_mode;
+			oldreverse=configParms.Reverse;
+			if(cursor_mode & 0x80)
+				writeCharAt(cursor_x*8,cursor_y*8,ch,1);
+			cursor_mode &= 0x7f;
+			if(ch & 0x80)
+				configParms.Reverse=1;
+      ch &= 0x7f;     // ...
+			writeCharAt(cursor_x*8,cursor_y*8,ch,1);
+			cursor_mode=oldcursor;
+			configParms.Reverse=oldreverse;
+      cursor_x++;
+      if(cursor_x>=SCREENSIZE_X/8) {
+newline:
+        cursor_x=0;
+        cursor_y++;
+        if(cursor_y>=SCREENSIZE_Y/8) {    
+
+          cursor_y=0;   // finire scroll ecc
+          }
+        }
+      break;
+    }  
   }
 
 int writeString(const char *s) {
   
-  while(s)
-    cwrite(s++);
+  while(*s)
+    cwrite(*s++);
   }
 
 

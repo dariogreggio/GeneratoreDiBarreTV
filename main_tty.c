@@ -128,14 +128,18 @@ _FICD( ICS_PGD3 & JTAGEN_OFF )		//
 /** VARIABLES ******************************************************/
 
 
-static const char CopyrString[]= {'T','e','r','m','i','n','a','l','e',' ','t','e','s','t','o',' ','3','2','x','2','4',' ',
-	'v',VERNUMH+'0','.',VERNUML/10+'0',(VERNUML % 10)+'0', ' ','2','3','/','1','1','/','2','3', 0 };
+#if SCREENSIZE_X==640
+static const char CopyrString[]= {'T','e','r','m','i','n','a','l','e',' ','t','e','s','t','o',' ','8','0','x','3','0',' ',
+#else
+static const char CopyrString[]= {'T','e','r','m','i','n','a','l','e',' ','t','e','s','t','o',' ','4','0','x','3','0',' ',
+#endif
+	'v',VERNUMH+'0','.',VERNUML/10+'0',(VERNUML % 10)+'0', ' ','2','5','/','1','1','/','2','3', 0 };
 
 #warning RICONTROLLARE EEprom emulata! non andava ago 21 (forse era errato il check) e modificata libreria flashoperations
 
 
 WORD videoRAM[VIDEO_BUFSIZE/2];
-BYTE cursor_x,cursor_y;
+BYTE cursor_x,cursor_y,cursor_mode;
 
 volatile WORD tick10=0;
 volatile BYTE second_10=0;
@@ -362,7 +366,11 @@ static void InitializeSystem(void) {
   CLKDIVbits.PLLPOST = 0; // N2 = 2  
 //#warning overclock!
 #ifdef USA_DMA_8BIT
+#if SCREENSIZE_X==640
+  PLLFBD = 47; // M = PLLFBD + 2 = 54 => 100MHz ossia 50 che diviso 8 per SPI fa ~160nS per pixel
+#else
   PLLFBD = 54; // M = PLLFBD + 2 = 54 => 100MHz ossia 50 che diviso 8 per SPI fa ~160nS per pixel
+#endif
 #else
   PLLFBD = 53;
 #endif
@@ -533,11 +541,17 @@ skippa:
 // bisogna fare attenzione: se DMA è più veloce di quanto escono i bit su SPI, si sovrappongono! v. sopra overclock (perché non c'è un divisore preciso qua)
   
 #ifdef USA_DMA_8BIT
-	SPI1CON1=0b0001001100100111;    // disable SCK; SMP=H; CLKPOL=H; 8bit; 1:4 & 1:3 (70:12=>~5.83MHz=>~160nS)
+#if SCREENSIZE_X==640
+	SPI1CON1=0b0001001100110111;    // disable SCK; SMP=H; CLKPOL=H; 8bit; 1:1 & 1:3 (50:3=>~12MHz=>~80nS)
 #else
-	SPI1CON1=0b0001011100100111;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:7 (70:8=>~6.25MHz=>~160nS)
+	SPI1CON1=0b0001001100100111;    // disable SCK; SMP=H; CLKPOL=H; 8bit; 1:1 & 1:7 (50:7=>~5.83MHz=>~160nS)
 #endif
-  // è un pelo troppo lento, con DMA... e 1:8 è troppo veloce e lascia un gap ogni 16bit...
+#else
+	SPI1CON1=0b0001011100100111;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:7 (50:7=>~6.25MHz=>~160nS)
+#endif
+  
+  // [è un pelo troppo lento, con DMA... e 1:8 è troppo veloce e lascia un gap ogni 16bit...]
+  // v. TNRBASE: c'è un bit-SPI di attesa dopo ogni transazione, inevitabile, per cui bisogna accelerare qua
 //	SPI1CON1=0b0001011100100011;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:8 (70:6=>~5.83MHz=>~160nS)
 //	SPI1CON1=0b0001011100111010;    // disable SCK; SMP=H; CLKPOL=H; 16bit; 1:1 & 1:8 (70:6=>~5.83MHz=>~160nS)
 	SPI1CON2=0b0000000000000000;    // 
@@ -610,6 +624,8 @@ int UserInit(void) {
 //	currentDate.mon=1;
   
   OC4CON1 |= 0x0006;
+  
+  cursor_mode=0x80;
 
 
 	return 1;
@@ -634,6 +650,7 @@ void plotInit(BYTE m) {
     drawLine(10,110, 250,200, 1) ;
     drawRectangle(30,30,180,100,1);
     drawBar(230,80,250,120,1);
+    drawCircle(40,200,30,1);
     }
   else {             // monoscopio!
     drawRectangle(0,0,SCREENSIZE_X-1,SCREENSIZE_Y-1,1);
@@ -653,35 +670,36 @@ void plotInit(BYTE m) {
     drawCircleFilled(SCREENSIZE_X/2,SCREENSIZE_Y/2,(SCREENSIZE_Y-2)/10/2,1);
     
     drawLine(SCREENSIZE_X/4.5,SCREENSIZE_Y/4.5,SCREENSIZE_X/2.5,SCREENSIZE_Y/3,1);
-    drawLine(SCREENSIZE_X/2.5,SCREENSIZE_Y/4.5,SCREENSIZE_X/4.5,SCREENSIZE_Y/3,1);
-    drawLine(SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y-1-SCREENSIZE_Y/3,
+    drawLine(SCREENSIZE_X-1-SCREENSIZE_X/2.5,SCREENSIZE_Y/3,
+			SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y/4.5,1);
+/*    drawLine(SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y-1-SCREENSIZE_Y/3,
             SCREENSIZE_X-1-SCREENSIZE_X/2.5,SCREENSIZE_Y-1-SCREENSIZE_Y/4.5,1);
     drawLine(SCREENSIZE_X-1-SCREENSIZE_X/2.5,SCREENSIZE_Y-1-SCREENSIZE_Y/3,
-            SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y-1-SCREENSIZE_Y/4.5,1);
+            SCREENSIZE_X-1-SCREENSIZE_X/4.5,SCREENSIZE_Y-1-SCREENSIZE_Y/4.5,1);*/
     
-    drawCircleFilled((SCREENSIZE_X/8)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,0);
+    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.7/2,0);
     //spostare verso bordi o rimpicciolire
-    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,1);
-    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.7/2,1);
+    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*1,1);
+    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.7/2,1);
     drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
     
-    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,0);
-    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.6/2,1);
-    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*1,1);
-    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.7/2,0);
+    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/3.7/2,1);
+    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*1,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*1,1);
+    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1+(SCREENSIZE_Y-2)/3.7/2,1);
     drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*1,(SCREENSIZE_Y-2)/20/2,1);
     
-    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,0);
-    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,1);
-    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.7/2,0);
+    drawCircle((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.7/2,1);
+    drawLine((SCREENSIZE_X/9)*1-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*1+(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*6,1);
+    drawLine((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.7/2,1);
     drawCircleFilled((SCREENSIZE_X/9)*1,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
     
-    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,0);
-    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.6/2,1);
-    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_Y/7)*6,1);
-    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.6/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.6/2,1);
+    drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.7/2,0);
+    drawCircle((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/3.7/2,1);
+    drawLine((SCREENSIZE_X/9)*8-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*6,(SCREENSIZE_X/9)*8+(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_Y/7)*6,1);
+    drawLine((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6-(SCREENSIZE_Y-2)/3.7/2,(SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6+(SCREENSIZE_Y-2)/3.7/2,1);
     drawCircleFilled((SCREENSIZE_X/9)*8,(SCREENSIZE_Y/7)*6,(SCREENSIZE_Y-2)/20/2,1);
     
     for(i=0; i<8; i++) {
@@ -728,7 +746,20 @@ void UserTasks(void) {
 		cnt++;
 		cnt2++;
 
-    mLED_1_Toggle();    // 1MHz 11/11/23
+    mLED_1_Toggle();    // [was: 1MHz 11/11/23]
+
+
+		if(cursor_mode & 0x80) {
+			if(!(TickGet() % 5)) {
+				BYTE oldreverse=configParms.Reverse;
+				cursor_mode ^= 1;
+//				if(cursor_mode & 1)
+        configParms.Reverse=cursor_mode & 1;
+					writeCharAt(cursor_x*8, cursor_y*8, ' ', 1);
+				configParms.Reverse=oldreverse;
+				}
+			}
+
 
 
     if(!sw1) {

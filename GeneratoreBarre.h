@@ -2,7 +2,7 @@
 
 #define SERNUM      1000
 #define VERNUMH     1
-#define VERNUML     1
+#define VERNUML     2
 
 // https://github.com/Picatout/vpc-32/blob/master/hardware/tvout/ntsc.c
 // https://www.gamedev.net/blog/161/entry-2165446-dspic33-vdc-with-glcd-or-pal-tv-output/
@@ -16,8 +16,13 @@
 #define DMA_READY __attribute__((/*space(dma),*/aligned(256)))    // 
 
 #ifdef TTY_CGA
+#if SCREENSIZE_X_640        // in progetto
+#define SCREENSIZE_X 640
+#define SCREENSIZE_Y 240
+#else
 #define SCREENSIZE_X 320
 #define SCREENSIZE_Y 240
+#endif
 
 #define USA_DMA 1
 #define USA_DMA_8BIT 1
@@ -42,10 +47,17 @@ enum __attribute((packed)) VSYNC_STATE {
 #define VERT_PORCH_COMP 6
   // occhio DMA conta fino a 0 compreso! v. interrupt
 #ifdef USA_DMA_8BIT
+#if SCREENSIZE_X==640  //
+#define HORIZ_SYNC_COMP 4  //2     // 0=3.5uS, 1=6; (4.7uS => 8% su 64uS totale @16bit
+#define HORIZ_PORCH_COMP 12      // 8uS => 12.5%
+// 15.625Hz, 52uS image = 80nS/pixel (640H)
+#define HORIZ_SHIFT_COMP 6  //((HORIZ_PORCH_COMP*6)/8)
+#else
 #define HORIZ_SYNC_COMP 2  //2     // 0=3.5uS, 1=6; (4.7uS => 8% su 64uS totale @16bit
 #define HORIZ_PORCH_COMP 6      // 8uS => 12.5%
 // 15.625Hz, 52uS image = 160nS/pixel (320H)
 #define HORIZ_SHIFT_COMP 3  //((HORIZ_PORCH_COMP*6)/8)
+#endif
 #else
 #define HORIZ_SYNC_COMP 1  //2     // 4.7uS => 8% su 64uS totale @16bit
 #define HORIZ_PORCH_COMP 3      // 8uS => 12.5%
@@ -82,7 +94,11 @@ int drawImage(const WORD *w);
 #ifdef TTY_CGA
 #ifdef USA_DMA
 #ifdef USA_DMA_8BIT
+#if SCREENSIZE_X==640
+#define TMR3BASE ((75*8)/(1000000000.0/(GetPeripheralClock())*1))	//   80nS/pixel @640x240
+#else
 #define TMR3BASE ((156*8)/(1000000000.0/(GetPeripheralClock())*1))	//   160nS/pixel @320x240
+#endif
 //anche qua c'è sempre un ritardino minimo di 100nS... ossia di un SPI cycle, non è chiaro se si può eliminare
 #define widthDMA (SCREENSIZE_X/8 +HORIZ_PORCH_COMP)
 #else

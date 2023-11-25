@@ -69,7 +69,11 @@
     
 #ifdef TTY_CGA
 //        #define GetSystemClock()            160000000UL     // v. anche OSCTUN e Chroma
+#if SCREENSIZE_X_640        // v. progetto...
+        #define GetSystemClock()            92000000UL     // v. anche OSCTUN e Chroma
+#else
         #define GetSystemClock()            100000000UL     // v. anche OSCTUN e Chroma
+#endif
 #else
         #define GetSystemClock()            142000000UL     // v. OSCTUN e Chroma
 #endif
